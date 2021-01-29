@@ -1,0 +1,2 @@
+# HHU_AutoHealthReport
+基于Python以及requests模块的自动签到脚本
