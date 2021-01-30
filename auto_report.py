@@ -38,17 +38,27 @@ re_get_wid = r"var _selfFormWid = '([A-Z0-9]{+})';"
 # Get Cookies
 #==========================
 def get_cookies_dict():
+    loginSuccess = 'http://my.hhu.edu.cn/loginSuccess.portal'
+    loginFailure = 'http://my.hhu.edu.cn/loginFailure.portal'
     login_post_data = {
         'Login.Token1': user_id,
         'Login.Token2': user_psw,
-        'goto': 'http://my.hhu.edu.cn/loginSuccess.portal',
-        'gotoOnFail': 'http://my.hhu.edu.cn/loginFailure.portal'
+        'goto': loginSuccess,
+        'gotoOnFail': loginFailure
     }
 
     s = requests.session()
 
-    s.post(url=url_login, headers=headers, data=login_post_data)
-    return s.cookies.get_dict()
+    res = s.post(url=url_login, headers=headers, data=login_post_data)
+    c = s.cookies.get_dict()
+    
+    if res.status_code != 200:
+        raise Exception('Error: 网络连接出错 ' + str(res.status_code))
+    # 302
+    if res.history[0].headers['location'] == loginFailure:
+        raise Exception('Error: 登录信息错误')
+    
+    return c
 
 # Write cookies file
 #==========================
@@ -64,20 +74,22 @@ def read_cookies(is_login = True):
         with open('cookies.json', 'r') as f:
             c = json.load(f)
     else:
-        c = get_cookies_dict()
-        write_cookies(c)
+        try:
+            c = get_cookies_dict()
+            write_cookies(c)
+        except Exception as e:
+            print(e.args[0])
     return c
 
 # Login 
 #==========================
 def login():
     cookies_dict = read_cookies()
-    
     s = requests.session()
     res = s.get(url=url_form, headers=headers, cookies=cookies_dict)
     fail_page = "<script type='text/javascript'>top.location.href='http://ids.hhu.edu.cn/amserver/UI/Login?goto=http://form.hhu.edu.cn/pdc/form/list';</script>"
 
-    if res.status_code == 200:
+    if cookies_dict != {}:
         if res.text == fail_page:
             print('登录信息已过期, 正在重新登录')
             cookies_dict = read_cookies(is_login=False)
@@ -85,7 +97,7 @@ def login():
         res.encoding='utf-8'
         return res, cookies_dict
     else:
-        raise Exception("Error: " + res.status_code)
+        raise Exception('Error: 登录失败')
 
 # Get the url of sign page
 #==========================
@@ -177,7 +189,10 @@ def report(page, cookies):
         print('签到失败')
     
 if __name__ == '__main__':
-    page, cookies = login()
-    report(page, cookies)
+    try:
+        page, cookies = login()
+        report(page, cookies)
+    except Exception as e:
+        print(e.args[0])
     
     
